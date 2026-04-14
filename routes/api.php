@@ -52,3 +52,6 @@ Route::get('/student/{studentIdentifier}/{fee_name}/receipt', [ReceiptController
 Route::get('/refunds', [RefundsController::class, 'getAllRefunds'])->name('getAllRefunds');
 Route::delete('/refunds/{billing_id}', [RefundsController::class, 'deleteRefund'])->name('deleteRefund');
 Route::post('/payments/{id}/refund', [RefundsController::class, 'refundPayment'])->name('refundPayment');   
+Route::get('/test', function () {
+    return response()->json(['message' => 'API is working']);
+});
