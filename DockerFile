@@ -1,17 +1,18 @@
 
-devr pro
-# --- Stage 1: Node.js (Build Assets) ---
+# --- Stage 1: Node (Build Frontend Assets) ---
 FROM node:20-alpine AS assets
 WORKDIR /app
+
 COPY package*.json ./
 RUN npm install
+
 COPY . .
 RUN npm run build
 
-# --- Stage 2: PHP & Application ---
+# --- Stage 2: PHP (Laravel App) ---
 FROM php:8.2-fpm-alpine
 
-# Install System Dependencies
+# Install system dependencies
 RUN apk add --no-cache \
     libpng-dev \
     libjpeg-turbo-dev \
@@ -25,36 +26,34 @@ RUN apk add --no-cache \
     postgresql-dev \
     $PHPIZE_DEPS
 
-# Install PHP Extensions required by Laravel 12
+# Install PHP extensions
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install pdo pdo_mysql pdo_pgsql mbstring zip exif pcntl gd
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Set Working Directory
 WORKDIR /var/www
 
-# Copy Application code
+# Copy app
 COPY . .
 
-# Copy built assets from Stage 1 (Vite/Build files)
+# Copy built assets
 COPY --from=assets /app/public/build ./public/build
 
-# Install PHP Dependencies
+# Install Laravel dependencies
 RUN composer install --no-interaction --optimize-autoloader --no-dev
 
-# Set Permissions
-RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
-# 1. Copy the entrypoint script into the container
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+# Fix permissions
+RUN chown -R www-data:www-data storage bootstrap/cache
 
-# 2. Grant execute permissions to the script
+# Copy entrypoint
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# 3. Set the Entrypoint (This runs your seeder before starting the server)
 ENTRYPOINT ["docker-entrypoint.sh"]
-# Expose port
-EXPOSE 9000
 
+EXPOSE 9000
 CMD ["php-fpm"]
+Write to Jayson Butawan
+s
