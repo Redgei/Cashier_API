@@ -34,25 +34,23 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www
 
-# Copy app
+# Copy application
 COPY . .
 
 # Copy built assets
 COPY --from=assets /app/public/build ./public/build
 
-# Install Laravel dependencies
-RUN composer install --no-interaction --optimize-autoloader --no-dev
+# Install dependencies (IMPORTANT: no scripts during build to avoid env crashes)
+RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
 
 # Fix permissions
 RUN chown -R www-data:www-data storage bootstrap/cache
 
-# Copy entrypoint
+# Entry point
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-ENTRYPOINT ["docker-entrypoint.sh"]
-
 EXPOSE 9000
-CMD ["php-fpm"]
 
-# 
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["php-fpm"]

@@ -1,5 +1,5 @@
 services:
-  #The Web Server (Nginx) - Handles SSL and Static Files
+  # Nginx Web Server
   nginx:
     image: nginx:alpine
     container_name: library-nginx
@@ -11,12 +11,12 @@ services:
       - ./docker/nginx/conf.d:/etc/nginx/conf.d
       - ./public:/var/www/public
       - ./docker/ssl:/etc/nginx/ssl:ro
-    networks:
-      - library-network
     depends_on:
       - app
+    networks:
+      - library-network
 
-  #he Laravel Application (PHP 8.5 FPM)
+  # Laravel App (PHP-FPM)
   app:
     build:
       context: .
@@ -27,15 +27,24 @@ services:
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
+
+      # IMPORTANT: runtime env only (safe)
+      ADMISSIONS_API_KEY: ${ADMISSIONS_API_KEY}
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+
     volumes:
-      # Keep storage persistent so logs/uploads aren't lost on restart
       - ./storage:/var/www/storage
-    networks:
-      - library-network
     depends_on:
       - db
+    networks:
+      - library-network
 
-  # The Database (MySQL)
+  # MySQL Database
   db:
     image: mysql:8.0
     container_name: library-db
