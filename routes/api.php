@@ -36,7 +36,6 @@ Route::delete('/payments/student/{student_id}/billing/{billing_id}', [PaymentCon
 Route::get('/payments/student/{student_id}', [PaymentController::class, 'getByStudent'])->name('getBillsOfStudents');
 Route::get('/payments/student/{student_id}/unpaid', [PaymentController::class, 'getUnpaidByStudent'])->name('getUnpaidBills');
 Route::get('/payments/student/{student_id}/paid', [PaymentController::class, 'getPaidByStudent'])->name('getPaidBills');
-
 Route::put('/payments/billing/{billing_id}', [PaymentController::class, 'updateByBillingId'])->name('updateBilling');
  
 //receipt route
