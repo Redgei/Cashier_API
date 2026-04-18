@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\HistoryLog;
 use App\Models\Bill;
 use App\Models\Payment;
+use App\Models\Receipt;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
@@ -61,8 +62,10 @@ class PaymentController extends Controller
         $validatedData['year_level'] = 'N/A';
         $validatedData['balance'] = (float) $validatedData['total_fee'] - (float) $validatedData['total_amount'];
         $validatedData['status'] = (float) $validatedData['balance'] <= 0.00 ? 'Paid' : 'Unpaid';
+        $validatedData['receipt_number'] = $this->generateUniqueReceiptNumber();
 
         $payment = Payment::forceCreate($validatedData);
+        $this->syncReceiptRecord($payment);
 
         return response()->json([
             'message' => 'Payment accepted successfully!',
@@ -106,7 +109,7 @@ class PaymentController extends Controller
             'payment_method' => $bill->payment_method ?: 'Cash',
             'status' => $status,
             'balance' => $balance,
-            'receipt_number' => $payment?->receipt_number,
+            'receipt_number' => $this->generateUniqueReceiptNumber(),
             'year_level' => 'N/A',
         ];
 
@@ -116,6 +119,8 @@ class PaymentController extends Controller
         } else {
             $payment = Payment::forceCreate($paymentData);
         }
+
+        $this->syncReceiptRecord($payment);
 
         $bill->total_amount = $newTotalAmount;
         $bill->balance = $balance;
@@ -187,7 +192,9 @@ public function update(Request $request, $student_id): JsonResponse
             $payment->status = $request->input('status');
         }
 
+        $payment->receipt_number = $this->generateUniqueReceiptNumber();
         $payment->save();
+        $this->syncReceiptRecord($payment);
 
         return response()->json([
             'message' => 'Payment updated successfully!',
@@ -274,9 +281,11 @@ public function updateStudentBill(Request $request, $student_id, $billing_id)
     // Recompute balance and status
     $payment->balance = $payment->total_fee - $payment->total_amount;
     $payment->status = $payment->balance <= 0 ? 'Paid' : 'Unpaid';
+    $payment->receipt_number = $this->generateUniqueReceiptNumber();
 
     // Save changes
     $payment->save();
+    $this->syncReceiptRecord($payment);
 
     return response()->json([
         'message' => 'Student bill updated successfully',
@@ -389,18 +398,55 @@ public function recordPayment(Request $request, $billing_id)
         return response()->json(['message' => 'Billing not found'], 404);
     }
 
-    // Generate receipt number if it doesn't exist
-    if (!$payment->receipt_number) {
-        $payment->receipt_number = 'OR-' . strtoupper(Str::random(8)); // OR-1A2B3C4D
-        $payment->status = 'PAID';
-        $payment->balance = 0;
-        $payment->save();
-    }
+    // Always issue a fresh receipt number for each recorded payment/update event.
+    $payment->receipt_number = $this->generateUniqueReceiptNumber();
+    $payment->status = 'PAID';
+    $payment->balance = 0;
+    $payment->save();
+    $this->syncReceiptRecord($payment);
 
     return response()->json([
         'message' => 'Payment recorded successfully',
         'receipt_number' => $payment->receipt_number,
         'payment' => $payment
     ], 200);
+}
+
+private function generateUniqueReceiptNumber(): string
+{
+    do {
+        $receiptNumber = 'OR-' . now()->format('YmdHis') . '-' . strtoupper(Str::random(4));
+    } while (
+        Payment::where('receipt_number', $receiptNumber)->exists()
+        || Receipt::where('receipt_number', $receiptNumber)->exists()
+    );
+
+    return $receiptNumber;
+}
+
+private function syncReceiptRecord(Payment $payment): void
+{
+    $receiptNumber = trim((string) $payment->receipt_number);
+
+    if ($receiptNumber === '') {
+        return;
+    }
+
+    $existing = Receipt::where('receipt_number', $receiptNumber)->first();
+
+    if ($existing) {
+        $existing->student_billing = $payment->billing_id;
+        $existing->student_name = $payment->student_name;
+        $existing->student_id = $payment->student_id;
+        $existing->save();
+        return;
+    }
+
+    Receipt::create([
+        'receipt_number' => $receiptNumber,
+        'student_billing' => $payment->billing_id,
+        'student_name' => $payment->student_name,
+        'student_id' => $payment->student_id,
+    ]);
 }
 }

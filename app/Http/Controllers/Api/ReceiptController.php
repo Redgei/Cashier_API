@@ -87,7 +87,7 @@ public function generateReceipt($billing_id)
 
     // Ensure receipt number exists
     if (!$payment->receipt_number) {
-        $payment->receipt_number = 'RCPT-' . strtoupper(mt_rand(100000, 999999));
+        $payment->receipt_number = $this->generateUniqueReceiptNumber();
         $payment->save();
     }
 
@@ -115,11 +115,34 @@ public function generateReceipt($billing_id)
 public function showReceipt($receiptNumber)
 {
     $payment = Payment::where('receipt_number', $receiptNumber)->first();
+    $receipt = null;
 
     if (!$payment) {
-        return response()->json([
-            'message' => 'Receipt not found'
-        ], 404);
+        $receipt = Receipt::where('receipt_number', $receiptNumber)->first();
+
+        if (!$receipt) {
+            return response()->json([
+                'message' => 'Receipt not found'
+            ], 404);
+        }
+
+        $payment = Payment::where('billing_id', $receipt->student_billing)->first();
+
+        if (!$payment) {
+            return response()->json([
+                'receipt_number' => $receipt->receipt_number,
+                'billing_id' => $receipt->student_billing,
+                'student_id' => $receipt->student_id,
+                'student_name' => $receipt->student_name,
+                'fee_name' => null,
+                'total_fee' => null,
+                'amount_paid' => null,
+                'payment_method' => null,
+                'status' => null,
+                'balance' => null,
+                'date' => null,
+            ], 200);
+        }
     }
 
     // Optional: only allow paid receipts
@@ -130,7 +153,7 @@ public function showReceipt($receiptNumber)
     }
 
     return response()->json([
-        'receipt_number' => $payment->receipt_number,
+        'receipt_number' => $receipt?->receipt_number ?? $payment->receipt_number,
         'billing_id' => $payment->billing_id,
         'student_id' => $payment->student_id,
         'student_name' => $payment->student_name,
@@ -302,6 +325,18 @@ private function backfillReceiptsFromPayments(): void
         ->each(function (Payment $payment) {
             $this->syncReceiptRecord($payment);
         });
+}
+
+private function generateUniqueReceiptNumber(): string
+{
+    do {
+        $receiptNumber = 'OR-' . now()->format('YmdHis') . '-' . strtoupper(Str::random(4));
+    } while (
+        Payment::where('receipt_number', $receiptNumber)->exists()
+        || Receipt::where('receipt_number', $receiptNumber)->exists()
+    );
+
+    return $receiptNumber;
 }
 
 }
